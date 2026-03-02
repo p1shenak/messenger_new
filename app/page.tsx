@@ -1,57 +1,65 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
-import { hasEnvVars } from "@/lib/utils";
-import Link from "next/link";
-import { Suspense } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
+// Импортируем клиент из твоей папки lib, которую мы сохранили
+import { createClient } from "@/lib/supabase/client"; 
+import { Send, Coins, Lock, Shield } from "lucide-react";
 
 export default function Home() {
+  const supabase = createClient();
+  const [msg, setMsg] = useState("");
+  const [balance, setBalance] = useState(0);
+
+  // Пример того, как мы будем работать с базой в будущем
+  useEffect(() => {
+    console.log("VOID: Подключение к Supabase активно");
+  }, []);
+
+  const handleSend = () => {
+    if (!msg.trim()) return;
+    // Логика начисления монет
+    setBalance(prev => prev + 0.90);
+    setMsg("");
+    alert("Пакет данных зашифрован и отправлен в сеть.");
+  };
+
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
-            </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
+    <main style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ border: '1px solid #222', padding: '40px', borderRadius: '35px', background: '#050505', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+        
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}>
+          <Shield size={18} color="#2563eb" />
+          <h1 style={{ fontSize: '24px', fontWeight: '900', letterSpacing: '-1px', margin: 0 }}>VOID V1</h1>
+        </div>
+        
+        <p style={{ fontSize: '9px', color: '#444', letterSpacing: '3px', marginBottom: '25px', textTransform: 'uppercase' }}>Secure Database Linked</p>
+        
+        <div style={{ margin: '20px 0', padding: '20px', background: 'linear-gradient(145deg, #0a0a0a, #111)', borderRadius: '25px', border: '1px solid #1a1a1a' }}>
+          <div style={{ fontSize: '10px', color: '#555', marginBottom: '5px' }}>NODE CREDITS</div>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#eab308' }}>
+            <Coins size={20} style={{ marginRight: '8px' }} />
+            {balance.toFixed(2)}
           </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          <Hero />
-          <main className="flex-1 flex flex-col gap-6 px-4">
-            <h2 className="font-medium text-xl mb-4">Next steps</h2>
-            {hasEnvVars ? <SignUpUserSteps /> : <ConnectSupabaseSteps />}
-          </main>
         </div>
 
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
-            >
-              Supabase
-            </a>
-          </p>
-          <ThemeSwitcher />
-        </footer>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <input 
+            value={msg} 
+            onChange={(e) => setMsg(e.target.value)} 
+            placeholder="Зашифрованное сообщение..." 
+            style={{ padding: '18px', borderRadius: '18px', border: '1px solid #222', background: '#0a0a0a', color: '#fff', outline: 'none', fontSize: '14px' }}
+          />
+          <button 
+            onClick={handleSend}
+            style={{ padding: '18px', borderRadius: '18px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
+          >
+            ОТПРАВИТЬ <Send size={16} />
+          </button>
+        </div>
+
+        <div style={{ marginTop: '25px', color: '#222', fontSize: '10px' }}>
+          <Lock size={10} /> AES-256 TUNNEL ACTIVE
+        </div>
       </div>
     </main>
   );
