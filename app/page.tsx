@@ -28,7 +28,7 @@ const NavButton = ({ icon: Icon, label, active, onClick, color = THEME.accent }:
 );
 
 export default function Home() {
-  const supabase = createClient();
+  // Состояния
   const [activeTab, setActiveTab] = useState("chat");
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -37,17 +37,25 @@ export default function Home() {
   const [newUsername, setNewUsername] = useState("");
   const [newColor, setNewColor] = useState(THEME.accent);
 
+  // Функция для безопасного получения клиента (только в браузере)
+  const getSupabase = () => createClient();
+
   useEffect(() => {
     const getData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) {
-        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (prof) {
-          setProfile(prof);
-          setNewUsername(prof.username || "");
-          setNewColor(prof.avatar_color || THEME.accent);
+      try {
+        const supabase = getSupabase();
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+        if (user) {
+          const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+          if (prof) {
+            setProfile(prof);
+            setNewUsername(prof.username || "");
+            setNewColor(prof.avatar_color || THEME.accent);
+          }
         }
+      } catch (e) {
+        console.log("Build optimization: Supabase ignored during prerender");
       }
       setLoading(false);
     };
@@ -57,12 +65,14 @@ export default function Home() {
   const handleAuth = async () => {
     const email = prompt("Email:"); const pass = prompt("Password:");
     if (!email || !pass) return;
+    const supabase = getSupabase();
     const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { username: email.split('@')[0] } } });
     if (error) alert(error.message); else alert("Проверьте почту!");
   };
 
   const handleUpdateProfile = async () => {
     if (!user) return;
+    const supabase = getSupabase();
     const { error } = await supabase.from('profiles').update({ username: newUsername, avatar_color: newColor }).eq('id', user.id);
     if (error) alert("Ошибка обновления"); else { alert("VOID профиль обновлен!"); window.location.reload(); }
   };
@@ -98,7 +108,7 @@ export default function Home() {
                 {profile?.username?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div style={{ flex: 1, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile?.username || user.email}</div>
-              <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><LogOut size={16} /></button>
+              <button onClick={() => getSupabase().auth.signOut().then(() => window.location.reload())} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><LogOut size={16} /></button>
             </div>
           ) : (
             <button onClick={handleAuth} style={{ width: '100%', background: THEME.accent, color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
