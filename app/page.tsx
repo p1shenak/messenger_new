@@ -1,86 +1,86 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Coins, Lock, Terminal } from "lucide-react";
+import { LayoutGrid, UserCircle, ShieldAlert, Coins, Send, LogIn, LogOut, Palette, Check, LoaderCircle, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+// --- КОНСТАНТЫ СТИЛЕЙ (Киберпанк/Дискорд) ---
+const THEME = {
+  bg: '#020202',
+  sidebar: '#080808',
+  card: '#0c0c0c',
+  border: '#1a1a1a',
+  text: '#e0e0e0',
+  muted: '#555',
+  accent: '#2563eb', // Основной неон
+  gold: '#eab308',
+};
+
+// Вспомогательный компонент для кнопок навигации
+const NavButton = ({ icon: Icon, label, active, onClick, color = THEME.accent }: any) => (
+  <button onClick={onClick} style={{
+    width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 15px', borderRadius: '12px',
+    background: active ? `${color}15` : 'none', border: 'none', color: active ? color : THEME.text,
+    cursor: 'pointer', textAlign: 'left', transition: '0.2s', fontWeight: active ? 'bold' : 'normal',
+    textShadow: active ? `0 0 10px ${color}` : 'none'
+  }}>
+    <Icon size={20} color={active ? color : THEME.muted} />
+    {label}
+  </button>
+);
+
 export default function Home() {
+  const supabase = createClient();
+  const [activeTab, setActiveTab] = useState("chat");
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Состояния для UI
   const [msg, setMsg] = useState("");
-  const [balance, setBalance] = useState(0);
-  const [status, setStatus] = useState("OFFLINE");
-  const [systemId, setSystemId] = useState("LOADING...");
+  const [newUsername, setNewUsername] = useState("");
+  const [newColor, setNewColor] = useState(THEME.accent);
 
   useEffect(() => {
-    // 1. Инициализация ID (теперь безопасно для билда)
-    setSystemId(Math.random().toString(16).slice(2, 10).toUpperCase());
-
-    // 2. Инициализация базы
-    try {
-      const supabase = createClient();
-      if (supabase) {
-        setStatus("SECURE NODE ACTIVE");
+    const getData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        setProfile(prof);
+        setNewUsername(prof?.username || "");
+        setNewColor(prof?.avatar_color || THEME.accent);
       }
-    } catch (e) {
-      console.error("Ошибка подключения:", e);
-    }
+      setLoading(false);
+    };
+    getData();
   }, []);
 
-  const handleSendMessage = () => {
-    if (!msg.trim()) return;
-    setBalance((prev) => prev + 0.90);
-    setMsg("");
-    console.log("Пакет отправлен:", msg);
+  // --- ЛОГИКА ---
+  const handleAuth = async () => {
+    const email = prompt("Email:"); const pass = prompt("Password:");
+    if (!email || !pass) return;
+    const { data, error } = await supabase.auth.signUp({ email, password: pass, options: { data: { username: email.split('@')[0] } } });
+    if (error) alert(error.message); else alert("Проверьте почту!");
   };
 
-  return (
-    <main style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', fontFamily: 'monospace', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      
-      <div style={{ width: '100%', maxWidth: '450px', border: '1px solid #1a1a1a', borderRadius: '20px', background: '#050505', overflow: 'hidden', boxShadow: '0 0 40px rgba(37, 99, 235, 0.1)' }}>
-        
-        <div style={{ padding: '20px', borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0a0a0a' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Terminal size={18} color="#2563eb" />
-            <span style={{ fontWeight: 'bold', letterSpacing: '2px' }}>VOID_OS</span>
-          </div>
-          <div style={{ fontSize: '10px', color: status.includes("ACTIVE") ? "#22c55e" : "#ef4444" }}>
-            ● {status}
-          </div>
-        </div>
+  const handleUpdateProfile = async () => {
+    if (!user) return;
+    const { error } = await supabase.from('profiles').update({ username: newUsername, avatar_color: newColor }).eq('id', user.id);
+    if (error) alert("Ошибка обновления"); else { alert("VOID профиль обновлен!"); window.location.reload(); }
+  };
 
-        <div style={{ padding: '30px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: '12px', color: '#444', marginBottom: '10px', textTransform: 'uppercase' }}>Credits</div>
-          <div style={{ fontSize: '42px', fontWeight: 'bold', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-            <Coins size={32} />
-            {balance.toFixed(2)}
-          </div>
-        </div>
-
-        <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
-          <Lock size={20} />
-        </div>
-
-        <div style={{ padding: '20px', background: '#0a0a0a', borderTop: '1px solid #1a1a1a' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input 
-              value={msg}
-              onChange={(e) => setMsg(e.target.value)}
-              placeholder="Type message..."
-              style={{ flex: 1, padding: '15px', borderRadius: '12px', border: '1px solid #222', background: '#000', color: '#22c55e', outline: 'none' }}
-            />
-            <button 
-              onClick={handleSendMessage}
-              style={{ background: '#2563eb', border: 'none', padding: '15px', borderRadius: '12px', color: '#fff', cursor: 'pointer' }}
-            >
-              <Send size={20} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: '20px', fontSize: '10px', color: '#333', textAlign: 'center' }}>
-        SYSTEM_ID: {systemId} <br />
-        ENCRYPTION: AES-256-GCM
-      </div>
-    </main>
+  if (loading) return (
+    <div style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' }}>
+      <LoaderCircle className="animate-spin" size={32} color={THEME.accent} />
+    </div>
   );
-}
+
+  return (
+    <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'sans-serif', overflow: 'hidden' }}>
+      
+      {/* 1. ЛЕВАЯ ПАНЕЛЬ (NAVIGATION) */}
+      <nav style={{ width: '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px', padding: '0 10px' }}>
+          <Zap size={22} color={profile?.avatar_color || THEME.accent} style={{ filter: `drop-shadow(0 0 5px ${profile?.avatar_color || THEME.accent})` }} />
+          <h1 style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '-1px', margin:
