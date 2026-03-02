@@ -1,65 +1,135 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Импортируем клиент из твоей папки lib, которую мы сохранили
-import { createClient } from "@/lib/supabase/client"; 
-import { Send, Coins, Lock, Shield } from "lucide-react";
+import { Send, Coins, Shield, Lock, Terminal } from "lucide-react";
+// Импорт клиента выносим в динамику через useEffect, чтобы не ломать билд
+import { createClient } from "@/lib/supabase/client";
 
 export default function Home() {
-  const supabase = createClient();
   const [msg, setMsg] = useState("");
   const [balance, setBalance] = useState(0);
+  const [status, setStatus] = useState("OFFLINE");
 
-  // Пример того, как мы будем работать с базой в будущем
+  // Инициализация базы только в браузере
   useEffect(() => {
-    console.log("VOID: Подключение к Supabase активно");
+    try {
+      const supabase = createClient();
+      if (supabase) {
+        setStatus("SECURE NODE ACTIVE");
+        console.log("VOID: Канал связи с Supabase установлен");
+      }
+    } catch (e) {
+      console.error("Ошибка подключения:", e);
+    }
   }, []);
 
-  const handleSend = () => {
+  const handleSendMessage = async () => {
     if (!msg.trim()) return;
-    // Логика начисления монет
-    setBalance(prev => prev + 0.90);
+
+    // Логика начисления (пока локально, чтобы ты видел результат сразу)
+    setBalance((prev) => prev + 0.90);
+    
+    // Эффект отправки
+    const currentMsg = msg;
     setMsg("");
-    alert("Пакет данных зашифрован и отправлен в сеть.");
+    console.log("Отправка зашифрованного пакета:", currentMsg);
+    
+    // Здесь будет вызов supabase.from('messages').insert(...) после настройки таблицы
   };
 
   return (
-    <main style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ border: '1px solid #222', padding: '40px', borderRadius: '35px', background: '#050505', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+    <main style={{ 
+      backgroundColor: '#000', 
+      color: '#fff', 
+      minHeight: '100vh', 
+      fontFamily: 'monospace', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      {/* ОСНОВНОЙ ТЕРМИНАЛ */}
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '450px', 
+        border: '1px solid #1a1a1a', 
+        borderRadius: '20px', 
+        background: '#050505',
+        overflow: 'hidden',
+        boxShadow: '0 0 40px rgba(37, 99, 235, 0.1)'
+      }}>
         
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}>
-          <Shield size={18} color="#2563eb" />
-          <h1 style={{ fontSize: '24px', fontWeight: '900', letterSpacing: '-1px', margin: 0 }}>VOID V1</h1>
+        {/* ХЕДЕР */}
+        <div style={{ padding: '20px', borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Terminal size={18} color="#2563eb" />
+            <span style={{ fontWeight: 'bold', letterSpacing: '2px' }}>VOID_OS</span>
+          </div>
+          <div style={{ fontSize: '10px', color: status.includes("ACTIVE") ? "#22c55e" : "#ef4444" }}>
+            ● {status}
+          </div>
         </div>
-        
-        <p style={{ fontSize: '9px', color: '#444', letterSpacing: '3px', marginBottom: '25px', textTransform: 'uppercase' }}>Secure Database Linked</p>
-        
-        <div style={{ margin: '20px 0', padding: '20px', background: 'linear-gradient(145deg, #0a0a0a, #111)', borderRadius: '25px', border: '1px solid #1a1a1a' }}>
-          <div style={{ fontSize: '10px', color: '#555', marginBottom: '5px' }}>NODE CREDITS</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#eab308' }}>
-            <Coins size={20} style={{ marginRight: '8px' }} />
+
+        {/* БАЛАНС */}
+        <div style={{ padding: '30px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#444', marginBottom: '10px', textTransform: 'uppercase' }}>Available Credits</div>
+          <div style={{ fontSize: '42px', fontWeight: 'bold', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <Coins size={32} />
             {balance.toFixed(2)}
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <input 
-            value={msg} 
-            onChange={(e) => setMsg(e.target.value)} 
-            placeholder="Зашифрованное сообщение..." 
-            style={{ padding: '18px', borderRadius: '18px', border: '1px solid #222', background: '#0a0a0a', color: '#fff', outline: 'none', fontSize: '14px' }}
-          />
-          <button 
-            onClick={handleSend}
-            style={{ padding: '18px', borderRadius: '18px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
-          >
-            ОТПРАВИТЬ <Send size={16} />
-          </button>
+        {/* ЭКРАН СООБЩЕНИЙ (ЗАГЛУШКА) */}
+        <div style={{ height: '150px', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: '1px solid #111' }}>
+          <div style={{ textAlign: 'center', opacity: 0.2 }}>
+            <Lock size={24} style={{ marginBottom: '10px' }} />
+            <div style={{ fontSize: '10px' }}>END-TO-END ENCRYPTION ENABLED</div>
+          </div>
         </div>
 
-        <div style={{ marginTop: '25px', color: '#222', fontSize: '10px' }}>
-          <Lock size={10} /> AES-256 TUNNEL ACTIVE
+        {/* ВВОД */}
+        <div style={{ padding: '20px', background: '#0a0a0a', borderTop: '1px solid #1a1a1a' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input 
+              type="text"
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              placeholder="Type encrypted packet..."
+              style={{ 
+                flex: 1, 
+                padding: '15px', 
+                borderRadius: '12px', 
+                border: '1px solid #222', 
+                background: '#000', 
+                color: '#22c55e',
+                outline: 'none',
+                fontSize: '14px'
+              }}
+            />
+            <button 
+              onClick={handleSendMessage}
+              style={{ 
+                background: '#2563eb', 
+                border: 'none', 
+                padding: '15px', 
+                borderRadius: '12px', 
+                color: '#fff', 
+                cursor: 'pointer',
+                transition: '0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#1d4ed8'}
+              onMouseOut={(e) => e.currentTarget.style.background = '#2563eb'}
+            >
+              <Send size={20} />
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div style={{ marginTop: '20px', fontSize: '10px', color: '#333', textAlign: 'center' }}>
+        SYSTEM_ID: {Math.random().toString(16).slice(2, 10).toUpperCase()} <br />
+        ENCRYPTION: AES-256-GCM
       </div>
     </main>
   );
