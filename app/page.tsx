@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { 
-  UserCircle, Zap, Lock, Users, Gift, ShoppingBag, Store, Send, MessageSquare 
+  UserCircle, Zap, Lock, Users, Gift, ShoppingBag, Store, Send, MessageSquare, Plus
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -17,10 +17,6 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
-  const [friends, setFriends] = useState<any[]>([]);
-  const [selectedFriend, setSelectedFriend] = useState<any>(null);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -29,7 +25,7 @@ export default function Home() {
 
   async function checkUser() {
     const supabase = createClient();
-    if (!supabase) { setLoading(false); return; }
+    if (!supabase) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -37,38 +33,41 @@ export default function Home() {
       let { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (!prof) {
         const { data: newProf } = await supabase.from('profiles').insert([{ 
-          id: user.id, username: user.user_metadata?.username || "VoidUser", balance: 5000 
+          id: user.id, username: user.user_metadata?.username || "User", balance: 5000 
         }]).select().single();
         setProfile(newProf);
       } else {
         setProfile(prof);
       }
-      // Загрузка друзей (для теста добавим пустой массив)
-      setFriends([]); 
     }
     setLoading(false);
   }
 
   const handleAuth = async () => {
     const supabase = createClient();
+    
+    // Если ключи не прогрузились, мы увидим это сообщение
     if (!supabase) {
-      alert("КРИТИЧЕСКАЯ ОШИБКА: Ключи Supabase не найдены в Vercel! Кнопка не сработает.");
+      alert("КРИТИЧЕСКАЯ ОШИБКА: Сайт всё еще не видит ключи из Vercel. Сделай REDEPLOY в панели Vercel!");
       return;
     }
 
-    const nick = prompt("ВВЕДИТЕ НИК:");
-    const pass = prompt("ВВЕДИТЕ ПАРОЛЬ:");
+    const nick = prompt("ПРИДУМАЙТЕ НИК (ENG):");
+    const pass = prompt("ПРИДУМАЙТЕ ПАРОЛЬ (6+ символов):");
     if (!nick || !pass) return;
 
     const email = `${nick.toLowerCase()}@void.network`;
+    
+    // Пробуем войти
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password: pass });
 
     if (loginError) {
+      // Если не вошли, пробуем создать аккаунт
       const { error: signUpError } = await supabase.auth.signUp({ 
         email, password: pass, options: { data: { username: nick } } 
       });
-      if (signUpError) alert("Ошибка: " + signUpError.message);
-      else alert("Аккаунт создан! Нажми ВХОД еще раз.");
+      if (signUpError) alert("ОШИБКА: " + signUpError.message);
+      else alert("АККАУНТ СОЗДАН! Нажми кнопку ВХОД еще раз.");
     } else {
       window.location.reload();
     }
@@ -80,83 +79,60 @@ export default function Home() {
     <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'monospace' }}>
       
       {/* SIDEBAR */}
-      <nav style={{ width: '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '20px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Zap color={THEME.accent} fill={THEME.accent} size={22} />
-          <span style={{ fontWeight: 'bold', fontSize: '18px' }}>VOID_OS</span>
+      <nav style={{ width: '280px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '25px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Zap color={THEME.accent} fill={THEME.accent} size={24} />
+          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>VOID_OS</span>
         </div>
         
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <button onClick={() => setActiveTab("chat")} style={{ background: activeTab === 'chat' ? '#111' : 'none', border: 'none', color: '#fff', padding: '12px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}><MessageSquare size={18}/> ЧАТЫ</button>
-          <button onClick={() => setActiveTab("store")} style={{ background: activeTab === 'store' ? '#111' : 'none', border: 'none', color: '#fff', padding: '12px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}><Store size={18}/> МАГАЗИН</button>
-          <button onClick={() => setActiveTab("profile")} style={{ background: activeTab === 'profile' ? '#111' : 'none', border: 'none', color: '#fff', padding: '12px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}><UserCircle size={18}/> ПРОФИЛЬ</button>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <button onClick={() => setActiveTab("chat")} style={{ background: activeTab === 'chat' ? '#111' : 'none', border: 'none', color: '#fff', padding: '15px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <MessageSquare size={20}/> КАНАЛ СВЯЗИ
+          </button>
+          <button onClick={() => setActiveTab("store")} style={{ background: activeTab === 'store' ? '#111' : 'none', border: 'none', color: '#fff', padding: '15px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Store size={20}/> МАГАЗИН
+          </button>
+          <button onClick={() => setActiveTab("profile")} style={{ background: activeTab === 'profile' ? '#111' : 'none', border: 'none', color: '#fff', padding: '15px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <UserCircle size={20}/> МОЯ НОДА
+          </button>
         </div>
 
         {user ? (
-          <div style={{ background: THEME.card, padding: '15px', borderRadius: '12px', border: `1px solid ${THEME.border}` }}>
-            <div style={{ color: THEME.gold, fontSize: '11px', fontWeight: 'bold' }}>{profile?.balance} CR</div>
-            <div style={{ fontSize: '14px' }}>{profile?.username}</div>
+          <div style={{ background: THEME.card, padding: '20px', borderRadius: '18px', border: `1px solid ${THEME.border}` }}>
+            <div style={{ color: THEME.gold, fontSize: '12px', fontWeight: 'bold' }}>{profile?.balance} CR</div>
+            <div style={{ fontSize: '15px', fontWeight: 'bold' }}>{profile?.username}</div>
+            <button onClick={() => createClient()?.auth.signOut().then(() => window.location.reload())} style={{ color: THEME.muted, background: 'none', border: 'none', cursor: 'pointer', marginTop: '10px' }}>ВЫЙТИ</button>
           </div>
         ) : (
-          <button onClick={handleAuth} style={{ background: THEME.accent, color: '#fff', border: 'none', padding: '15px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>ВХОД</button>
+          <button onClick={handleAuth} style={{ background: THEME.accent, color: '#fff', border: 'none', padding: '16px', borderRadius: '14px', fontWeight: 'bold', cursor: 'pointer' }}>ВХОД В СИСТЕМУ</button>
         )}
       </nav>
 
-      {/* CHAT AREA */}
+      {/* MAIN CONTENT */}
       <section style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {activeTab === "chat" ? (
           <div style={{ display: 'flex', height: '100%' }}>
-            {/* Список друзей */}
-            <div style={{ width: '250px', borderRight: `1px solid ${THEME.border}`, padding: '20px' }}>
-              <p style={{ fontSize: '12px', color: THEME.muted, marginBottom: '15px' }}>КОНТАКТЫ</p>
-              {friends.length === 0 ? (
-                <div style={{ fontSize: '11px', color: THEME.muted }}>Список пуст. Добавьте друга по ID в профиле.</div>
-              ) : (
-                friends.map(f => (
-                  <div key={f.id} onClick={() => setSelectedFriend(f)} style={{ padding: '10px', cursor: 'pointer', borderRadius: '8px', background: selectedFriend?.id === f.id ? '#111' : 'none' }}>
-                    {f.username}
-                  </div>
-                ))
-              )}
+            <div style={{ width: '280px', borderRight: `1px solid ${THEME.border}`, padding: '20px' }}>
+               <p style={{ fontSize: '12px', color: THEME.muted, marginBottom: '20px' }}>АКТИВНЫЕ КОНТАКТЫ</p>
+               <div style={{ color: THEME.muted, fontSize: '11px', textAlign: 'center', marginTop: '50px' }}>Войдите, чтобы искать друзей.</div>
             </div>
-
-            {/* Окно сообщений */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              {selectedFriend ? (
-                <>
-                  <div style={{ padding: '20px', borderBottom: `1px solid ${THEME.border}`, fontWeight: 'bold' }}>
-                    Чат с {selectedFriend.username}
-                  </div>
-                  <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
-                    {/* Тут будут сообщения */}
-                    <div style={{ color: THEME.muted, textAlign: 'center', marginTop: '20%' }}>История сообщений зашифрована.</div>
-                  </div>
-                  <div style={{ padding: '20px', borderTop: `1px solid ${THEME.border}`, display: 'flex', gap: '10px' }}>
-                    <input 
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Введите сообщение..." 
-                      style={{ flex: 1, background: '#111', border: 'none', color: '#fff', padding: '12px', borderRadius: '8px' }}
-                    />
-                    <button style={{ background: THEME.accent, border: 'none', padding: '10px 20px', borderRadius: '8px', color: '#fff', cursor: 'pointer' }}>
-                      <Send size={18} />
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.muted }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#050505' }}>
+               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: THEME.muted }}>
                   <div style={{ textAlign: 'center' }}>
-                    <Lock size={40} style={{ marginBottom: '10px' }} />
-                    <p>ВЫБЕРИТЕ КОНТАКТ ДЛЯ СВЯЗИ</p>
+                    <Lock size={50} style={{ marginBottom: '15px', opacity: 0.2 }} />
+                    <p>ВЫБЕРИТЕ КАНАЛ СВЯЗИ</p>
                   </div>
-                </div>
-              )}
+               </div>
+               <div style={{ padding: '25px', borderTop: `1px solid ${THEME.border}`, display: 'flex', gap: '15px' }}>
+                  <input placeholder="Введите сообщение..." style={{ flex: 1, background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '15px', borderRadius: '12px' }} />
+                  <button style={{ background: THEME.accent, border: 'none', padding: '0 25px', borderRadius: '12px', color: '#fff' }}><Send size={20}/></button>
+               </div>
             </div>
           </div>
         ) : (
           <div style={{ padding: '40px' }}>
-            {/* Тут контент магазина или профиля */}
-            <p>Переключитесь на вкладку Профиль, чтобы увидеть свой ID.</p>
+             <h2 style={{ marginBottom: '20px' }}>{activeTab.toUpperCase()}</h2>
+             <div style={{ color: THEME.muted }}>Контент будет доступен после авторизации.</div>
           </div>
         )}
       </section>
