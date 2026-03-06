@@ -244,7 +244,6 @@ export default function Home() {
                {reports.map(r => (
                  <div key={r.id} style={{borderBottom: `1px solid ${THEME.border}`, padding: '15px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                    <div>
-                     {/* ИСПРАВЛЕННАЯ СТРОКА ТУТ */}
                      <b style={{color: THEME.accent}}>{r.reporter?.username}</b> {" -> "} <b style={{color: THEME.red}}>{r.reported?.username}</b>
                      <div style={{color: THEME.muted, fontSize: '12px', marginTop: '5px'}}>{r.reason}</div>
                    </div>
@@ -257,7 +256,7 @@ export default function Home() {
 
         {activeTab === "profile" && (
           <div style={{maxWidth: '800px'}}>
-            <div style={{height: '200px', background: `url(${profile?.banner_url || ''})`, backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: '25px', position: 'relative', backgroundActive: '#111'}}>
+            <div style={{height: '200px', background: `url(${profile?.banner_url || ''})`, backgroundColor: '#111', backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: '25px', position: 'relative'}}>
                <img src={profile?.avatar_url || ''} style={{width: '100px', height: '100px', borderRadius: '50%', border: `5px solid ${THEME.bg}`, position: 'absolute', bottom: '-50px', left: '40px', objectFit: 'cover', background: '#222'}} alt="" />
             </div>
             <div style={{marginTop: '70px', marginLeft: '40px'}}>
@@ -287,7 +286,7 @@ export default function Home() {
 }
 
 const btnTab = (active: boolean) => ({
-  background: active ? '#111' : 'none', border: 'none', color: active ? '#fff' : '#777', padding: '14px', borderRadius: '12px', textAlign: 'left' as const, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', fontWeight: 'bold'
+  background: active ? '#111' : 'none', border: 'none', color: active ? '#fff' : '#777', padding: '14px' as string | number, borderRadius: '12px', textAlign: 'left' as const, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', fontWeight: 'bold'
 });
 const inputStyle = { width: '100%', background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '12px', borderRadius: '12px', fontSize: '13px' };
 const cardStyle = { background: THEME.card, padding: '15px', borderRadius: '15px', border: `1px solid ${THEME.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
