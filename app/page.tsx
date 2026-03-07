@@ -5,8 +5,8 @@ import * as LucideIcons from "lucide-react";
 import { createBrowserClient } from '@supabase/ssr';
 
 const { 
-  UserCircle, MessageSquare, ShieldAlert, Trash2, Send, 
-  ShoppingBag, Lock, Gift, UserPlus, UserCheck, UserX, Search, Ban
+  UserCircle, MessageSquare, ShieldAlert, Send, ShoppingBag, 
+  Gift, UserPlus, UserCheck, Search, Ban, Flag, Edit3, Save, Eye
 } = LucideIcons;
 
 const THEME = {
@@ -16,258 +16,258 @@ const THEME = {
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Auth
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
-
-  // Data
+  // Данные
   const [inventory, setInventory] = useState<any[]>([]);
   const [storeGifts, setStoreGifts] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
   
-  // Search & Chat
-  const [searchId, setSearchId] = useState("");
-  const [foundUser, setFoundUser] = useState<any>(null);
+  // Чат и Поиск
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [msgInput, setMsgInput] = useState("");
+  const [searchId, setSearchId] = useState("");
+  const [foundUser, setFoundUser] = useState<any>(null);
 
-  // Admin
-  const [newGift, setNewGift] = useState({ name: '', image_url: '', price: 0 });
+  // Кастомизация
+  const [editMode, setEditMode] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [newAvatar, setNewAvatar] = useState("");
+
+  // Админ: Репорты и Шпионаж
+  const [reports, setReports] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!, 
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // Безопасная проверка ширины экрана для Next.js
   useEffect(() => {
     setMounted(true);
-    setIsMobile(window.innerWidth < 768);
     checkUser();
-    
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   async function checkUser() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (prof?.banned_until && new Date(prof.banned_until) > new Date()) prof.is_blocked = true;
       setProfile(prof);
-      if (prof) loadData(prof.id);
+      if (prof) {
+        setNewUsername(prof.username || "");
+        setNewAvatar(prof.avatar_url || "");
+        loadData(prof.id);
+      }
     }
     setLoading(false);
   }
 
-  const loadData = (uid: string) => {
-    loadInventory(uid);
-    loadFriends(uid);
-    loadRequests(uid);
-    loadStore();
+  const loadData = async (uid: string) => {
+    // Загрузка магазина (явно проверяем наличие данных)
+    const { data: gifts } = await supabase.from('gifts').select('*').order('created_at', { ascending: false });
+    setStoreGifts(gifts || []);
+
+    const { data: inv } = await supabase.from('inventory').select('*, gifts(*)').eq('user_id', uid);
+    setInventory(inv || []);
+
+    const { data: f } = await supabase.from('friends').select('*, profiles!friends_friend_id_fkey(*), requester:profiles!friends_user_id_fkey(*)').eq('status', 'accepted').or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+    setFriends(f?.map(i => i.user_id === uid ? i.profiles : i.requester) || []);
+
+    const { data: req } = await supabase.from('friends').select('*, requester:profiles!friends_user_id_fkey(*)').eq('friend_id', uid).eq('status', 'pending');
+    setFriendRequests(req || []);
+    
+    if (profile?.is_admin) {
+        const { data: reps } = await supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(username), target:profiles!reports_target_id_fkey(username)');
+        setReports(reps || []);
+    }
   };
 
-  const loadInventory = async (uid: string) => {
-    const { data } = await supabase.from('inventory').select('*, gifts(*)').eq('user_id', uid);
-    setInventory(data || []);
+  // --- ФУНКЦИИ ---
+  const saveProfile = async () => {
+    await supabase.from('profiles').update({ username: newUsername, avatar_url: newAvatar }).eq('id', profile.id);
+    setProfile({ ...profile, username: newUsername, avatar_url: newAvatar });
+    setEditMode(false);
   };
 
-  const loadStore = async () => {
-    const { data } = await supabase.from('gifts').select('*').order('created_at', { ascending: false });
-    setStoreGifts(data || []);
+  const sendReport = async (targetId: string) => {
+    const reason = prompt("Причина репорта:");
+    if (!reason) return;
+    await supabase.from('reports').insert([{ reporter_id: profile.id, target_id: targetId, reason }]);
+    alert("Репорт отправлен администратору.");
   };
 
-  const loadFriends = async (uid: string) => {
-    const { data } = await supabase.from('friends')
-      .select('*, profiles!friends_friend_id_fkey(*), requester:profiles!friends_user_id_fkey(*)')
-      .eq('status', 'accepted')
-      .or(`user_id.eq.${uid},friend_id.eq.${uid}`);
-    const formatted = data?.map(f => f.user_id === uid ? f.profiles : f.requester);
-    setFriends(formatted || []);
-  };
-
-  const loadRequests = async (uid: string) => {
-    const { data } = await supabase.from('friends').select('*, requester:profiles!friends_user_id_fkey(*)').eq('friend_id', uid).eq('status', 'pending');
-    setFriendRequests(data || []);
-  };
-
-  // --- ACTIONS ---
-  const handleAuth = async () => {
-    const { error } = isRegistering 
-      ? await supabase.auth.signUp({ email, password }) 
-      : await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message); else window.location.reload();
+  const spyOnChat = async (userId1: string, userId2: string) => {
+    const { data } = await supabase.from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${userId1},receiver_id.eq.${userId2}),and(sender_id.eq.${userId2},receiver_id.eq.${userId1})`)
+        .order('created_at', { ascending: true });
+    setMessages(data || []);
+    setActiveTab("chat"); // Переключаем в окно чата для просмотра
+    setSelectedChat({ username: "SYSTEM_VIEW", id: "spy" }); 
   };
 
   const buyItem = async (gift: any) => {
     if (profile.balance < gift.price) return alert("Недостаточно CR");
-    const { error } = await supabase.from('profiles').update({ balance: profile.balance - gift.price }).eq('id', profile.id);
-    if (!error) {
-      await supabase.from('inventory').insert([{ user_id: profile.id, gift_id: gift.id }]);
-      alert("Куплено!");
-      checkUser();
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!msgInput.trim() || !selectedChat) return;
-    const msg = { sender_id: profile.id, receiver_id: selectedChat.id, text: msgInput };
-    await supabase.from('messages').insert([msg]);
-    setMessages([...messages, { ...msg, created_at: new Date().toISOString() }]);
-    setMsgInput("");
+    await supabase.from('profiles').update({ balance: profile.balance - gift.price }).eq('id', profile.id);
+    await supabase.from('inventory').insert([{ user_id: profile.id, gift_id: gift.id }]);
+    alert("Успешно!");
+    checkUser();
   };
 
   if (!mounted) return null;
-  if (profile?.is_blocked) return <div style={{background:'#000', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:THEME.red}}><h1>BANNED</h1></div>;
-
-  if (!profile && !loading) {
-    return (
-      <div style={{ background: THEME.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-        <div style={{ background: THEME.card, padding: '30px', borderRadius: '20px', border: `1px solid ${THEME.border}`, width: '100%', maxWidth: '400px' }}>
-          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '20px' }}>VOID_OS</h2>
-          <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={{...inputStyle, marginBottom:'10px'}} />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={{...inputStyle, marginBottom:'20px'}} />
-          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "REGISTER" : "LOGIN"}</button>
-          <p onClick={() => setIsRegistering(!isRegistering)} style={{ textAlign: 'center', fontSize: '12px', marginTop: '15px', cursor: 'pointer', color: THEME.muted }}>
-            {isRegistering ? "Back to Login" : "Create Account"}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', flexDirection: isMobile ? 'column' : 'row', fontFamily: 'monospace' }}>
+    <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'monospace' }}>
       
-      {/* SIDEBAR */}
-      <nav style={{ width: isMobile ? '100%' : '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '20px', display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: '10px' }}>
-        {!isMobile && <h2 style={{ color: THEME.accent, marginBottom: '20px' }}>VOID_OS</h2>}
-        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/></button>
-        <button onClick={() => setActiveTab("store")} style={btnTab(activeTab === "store")}><ShoppingBag size={18}/></button>
-        <button onClick={() => setActiveTab("chat")} style={btnTab(activeTab === "chat")}><MessageSquare size={18}/> {friendRequests.length > 0 && "!"}</button>
-        {profile?.is_admin && <button onClick={() => {setActiveTab("admin"); supabase.from('profiles').select('*').then(d => setAllUsers(d.data || []));}} style={{...btnTab(activeTab === "admin"), color: THEME.red} as any}><ShieldAlert size={18}/></button>}
-        {!isMobile && <div style={{marginTop:'auto', fontSize:'10px', color:THEME.muted}}>ID: {profile?.id?.slice(0,8)}... <br/>{profile?.balance} CR</div>}
+      {/* САЙДБАР С НАЗВАНИЯМИ */}
+      <nav style={{ width: '240px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <h2 style={{ color: THEME.accent, marginBottom: '20px' }}>VOID_OS</h2>
+        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> ПРОФИЛЬ</button>
+        <button onClick={() => setActiveTab("store")} style={btnTab(activeTab === "store")}><ShoppingBag size={18}/> МАГАЗИН</button>
+        <button onClick={() => setActiveTab("chat")} style={btnTab(activeTab === "chat")}><MessageSquare size={18}/> СВЯЗЬ</button>
+        {profile?.is_admin && (
+          <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.red} as any}><ShieldAlert size={18}/> АДМИНКА</button>
+        )}
+        
+        <div style={{ marginTop: 'auto', background: THEME.card, padding: '15px', borderRadius: '15px' }}>
+          <div style={{ fontSize: '10px', color: THEME.muted }}>ID: {profile?.id?.slice(0,8)}</div>
+          <div style={{ fontWeight: 'bold', color: THEME.gold }}>{profile?.balance} CR</div>
+        </div>
       </nav>
 
-      {/* CONTENT */}
-      <section style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+      {/* КОНТЕНТ */}
+      <section style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
         
+        {/* ПРОФИЛЬ И КАСТОМИЗАЦИЯ */}
+        {activeTab === "profile" && (
+          <div style={{ maxWidth: '600px' }}>
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '30px', background: THEME.card, padding: '20px', borderRadius: '20px' }}>
+              <img src={profile?.avatar_url || 'https://via.placeholder.com/80'} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: `2px solid ${THEME.accent}` }} />
+              <div>
+                {editMode ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input value={newUsername} onChange={e => setNewUsername(e.target.value)} style={inputStyle} placeholder="Никнейм" />
+                    <input value={newAvatar} onChange={e => setNewAvatar(e.target.value)} style={inputStyle} placeholder="URL Аватара" />
+                    <button onClick={saveProfile} style={{ background: THEME.success, border: 'none', padding: '5px', borderRadius: '5px' }}><Save size={16}/></button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 style={{ margin: 0 }}>{profile?.username} <Edit3 size={16} onClick={() => setEditMode(true)} style={{ cursor: 'pointer', color: THEME.muted }} /></h2>
+                    <p style={{ color: THEME.muted, fontSize: '12px' }}>Статус: Online</p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <h3>ИНВЕНТАРЬ ({inventory.length})</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+              {inventory.map(i => (
+                <div key={i.id} style={{ background: THEME.card, padding: '10px', borderRadius: '15px', textAlign: 'center' }}>
+                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '80px', objectFit: 'contain' }} />
+                  <div style={{ fontSize: '11px', marginTop: '5px' }}>{i.gifts?.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* МАГАЗИН */}
         {activeTab === "store" && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '15px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+            {storeGifts.length === 0 && <p>В магазине пусто. Добавьте товары в админке.</p>}
             {storeGifts.map(g => (
-              <div key={g.id} style={{ background: THEME.card, padding: '15px', borderRadius: '15px', border: `1px solid ${THEME.border}` }}>
-                <img src={g.image_url} style={{ width: '100%', height: '100px', objectFit: 'contain' }} alt="GIF"/>
-                <div style={{ fontWeight: 'bold', fontSize: '13px', margin: '10px 0' }}>{g.name}</div>
-                <div style={{ color: THEME.gold, marginBottom: '10px' }}>{g.price} CR</div>
+              <div key={g.id} style={{ background: THEME.card, padding: '15px', borderRadius: '20px', border: `1px solid ${THEME.border}` }}>
+                <img src={g.image_url} style={{ width: '100%', height: '120px', objectFit: 'contain' }} />
+                <div style={{ fontWeight: 'bold', marginTop: '10px' }}>{g.name}</div>
+                <div style={{ color: THEME.gold, margin: '10px 0' }}>{g.price} CR</div>
                 <button onClick={() => buyItem(g)} style={btnAction}>КУПИТЬ</button>
               </div>
             ))}
           </div>
         )}
 
-        {/* СВЯЗЬ (ПОИСК И ЧАТ) */}
+        {/* СВЯЗЬ (ЧАТ + РЕПОРТЫ) */}
         {activeTab === "chat" && (
-          <div style={{ display: 'flex', gap: '20px', height: '100%', flexDirection: isMobile ? 'column' : 'row' }}>
-            <div style={{ width: isMobile ? '100%' : '280px', borderRight: isMobile ? 'none' : `1px solid ${THEME.border}`, paddingRight: '10px' }}>
-              <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
-                <input placeholder="Search ID..." value={searchId} onChange={e => setSearchId(e.target.value)} style={inputStyle} />
-                <button onClick={async () => {
-                  const { data } = await supabase.from('profiles').select('*').eq('id', searchId.trim()).maybeSingle();
-                  setFoundUser(data || "not_found");
-                }} style={btnIcon}><Search size={18} /></button>
-              </div>
-              {foundUser && foundUser !== "not_found" && (
-                <div style={foundUserCard}>
-                  <span>{foundUser.username}</span>
-                  <button onClick={() => supabase.from('friends').insert([{ user_id: profile.id, friend_id: foundUser.id, status: 'pending' }])} style={btnIcon}><UserPlus size={16}/></button>
+          <div style={{ display: 'flex', gap: '20px', height: '100%' }}>
+            <div style={{ width: '250px' }}>
+              <input placeholder="Поиск по ID" onChange={e => setSearchId(e.target.value)} style={{...inputStyle, marginBottom:'10px'}} />
+              <button onClick={async () => {
+                const {data} = await supabase.from('profiles').select('*').eq('id', searchId).single();
+                setFoundUser(data);
+              }} style={btnAction}>НАЙТИ</button>
+              
+              {foundUser && (
+                <div style={{ marginTop: '10px', padding: '10px', background: THEME.card, borderRadius: '10px' }}>
+                  {foundUser.username} 
+                  <Flag size={14} onClick={() => sendReport(foundUser.id)} style={{ marginLeft: '10px', cursor: 'pointer', color: THEME.red }} />
                 </div>
               )}
-              {friendRequests.map(r => (
-                <div key={r.id} style={reqCard}>
-                  <span>Запрос от {r.requester?.username}</span>
-                  <button onClick={() => supabase.from('friends').update({ status: 'accepted' }).eq('id', r.id).then(()=>loadData(profile.id))} style={btnIcon}><UserCheck size={16}/></button>
-                </div>
+
+              <h4 style={{ color: THEME.muted }}>ДРУЗЬЯ</h4>
+              {friends.map(f => (
+                <div key={f.id} onClick={() => setSelectedChat(f)} style={{ padding: '10px', cursor: 'pointer', background: selectedChat?.id === f.id ? THEME.border : 'none', borderRadius: '10px' }}>{f.username}</div>
               ))}
-              <div style={{marginTop:'20px'}}>
-                {friends.map(f => (
-                  <div key={f.id} onClick={() => {
-                    setSelectedChat(f);
-                    supabase.from('messages').select('*').or(`and(sender_id.eq.${profile.id},receiver_id.eq.${f.id}),and(sender_id.eq.${f.id},receiver_id.eq.${profile.id})`).order('created_at', { ascending: true }).then(d => setMessages(d.data || []));
-                  }} style={friendItem(selectedChat?.id === f.id)}>{f.username}</div>
-                ))}
-              </div>
             </div>
-            {selectedChat && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1, overflowY: 'auto', marginBottom: '10px' }}>
-                  {messages.map((m, i) => (
-                    <div key={i} style={{ textAlign: m.sender_id === profile.id ? 'right' : 'left', marginBottom: '8px' }}>
-                      <span style={{ background: m.sender_id === profile.id ? THEME.accent : THEME.card, padding: '8px 12px', borderRadius: '12px', display: 'inline-block' }}>{m.text}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input value={msgInput} onChange={e => setMsgInput(e.target.value)} style={inputStyle} placeholder="Message..." />
-                  <button onClick={sendMessage} style={btnIcon}><Send size={18} /></button>
-                </div>
-              </div>
-            )}
+            
+            <div style={{ flex: 1, background: THEME.card, borderRadius: '20px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+               {selectedChat ? (
+                 <>
+                   <div style={{ flex: 1, overflowY: 'auto' }}>
+                     {messages.map((m, i) => (
+                       <div key={i} style={{ textAlign: m.sender_id === profile.id ? 'right' : 'left', marginBottom: '10px' }}>
+                         <span style={{ background: m.sender_id === profile.id ? THEME.accent : THEME.sidebar, padding: '8px 12px', borderRadius: '12px' }}>{m.text}</span>
+                       </div>
+                     ))}
+                   </div>
+                   {selectedChat.id !== "spy" && (
+                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                       <input value={msgInput} onChange={e => setMsgInput(e.target.value)} style={inputStyle} />
+                       <button onClick={() => {
+                         supabase.from('messages').insert([{ sender_id: profile.id, receiver_id: selectedChat.id, text: msgInput }]);
+                         setMessages([...messages, { sender_id: profile.id, text: msgInput }]);
+                         setMsgInput("");
+                       }} style={btnAction}>ОТПРАВИТЬ</button>
+                     </div>
+                   )}
+                 </>
+               ) : <p>Выберите чат</p>}
+            </div>
           </div>
         )}
 
-        {/* АДМИНКА */}
+        {/* АДМИНКА С РЕПОРТАМИ */}
         {activeTab === "admin" && (
-          <div style={{display:'flex', flexDirection:'column', gap:'30px'}}>
-            <div style={adminCard}>
-              <h3>ADD ITEM</h3>
-              <input placeholder="GIF URL (.gif)" onChange={e => setNewGift({...newGift, image_url: e.target.value})} style={inputStyle} />
-              <input placeholder="Name" onChange={e => setNewGift({...newGift, name: e.target.value})} style={inputStyle} />
-              <input type="number" placeholder="Price" onChange={e => setNewGift({...newGift, price: parseInt(e.target.value)})} style={inputStyle} />
-              <button onClick={() => supabase.from('gifts').insert([newGift]).then(()=>loadStore())} style={btnMain}>CREATE</button>
-            </div>
-            <div style={adminCard}>
-              <h3>USERS</h3>
-              {allUsers.map(u => (
-                <div key={u.id} style={userRow}>
-                  <span>{u.username}</span>
-                  <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={() => {
-                       const g = prompt("Gift ID:");
-                       if(g) supabase.from('inventory').insert([{user_id: u.id, gift_id: g}]);
-                    }} style={btnIcon}><Gift size={16}/></button>
-                    <button onClick={() => {
-                       const d = new Date(Date.now() + 86400000).toISOString();
-                       supabase.from('profiles').update({ banned_until: d }).eq('id', u.id);
-                    }} style={{...btnIcon, color:THEME.red}}><Ban size={16}/></button>
-                  </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ background: THEME.card, padding: '20px', borderRadius: '20px' }}>
+              <h3>ЖАЛОБЫ (REPORTS)</h3>
+              {reports.map(r => (
+                <div key={r.id} style={{ borderBottom: `1px solid ${THEME.border}`, padding: '10px 0' }}>
+                  <div style={{ fontSize: '12px' }}>От: <b>{r.reporter?.username}</b> на: <b>{r.target?.username}</b></div>
+                  <div style={{ color: THEME.gold }}>"{r.reason}"</div>
+                  <button onClick={() => spyOnChat(r.reporter_id, r.target_id)} style={{ marginTop: '5px', fontSize: '10px', background: THEME.accent, border: 'none', color: '#fff', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>
+                    <Eye size={12} /> СМОТРЕТЬ ЧАТ
+                  </button>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* ПРОФИЛЬ */}
-        {activeTab === "profile" && (
-          <div>
-            <h3>INVENTORY ({inventory.length})</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-              {inventory.map(i => (
-                <div key={i.id} style={{ background: THEME.card, padding: '10px', borderRadius: '12px', textAlign: 'center' }}>
-                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '50px', objectFit: 'contain' }} alt="GIF"/>
-                  <div style={{ fontSize: '9px', marginTop: '5px' }}>{i.gifts?.name}</div>
-                </div>
-              ))}
+            
+            <div style={{ background: THEME.card, padding: '20px', borderRadius: '20px' }}>
+              <h3>НОВЫЙ ТОВАР</h3>
+              <input placeholder="Название" id="gn" style={inputStyle} />
+              <input placeholder="URL GIF" id="gu" style={inputStyle} />
+              <input placeholder="Цена" id="gp" style={inputStyle} />
+              <button onClick={async () => {
+                const name = (document.getElementById('gn') as HTMLInputElement).value;
+                const url = (document.getElementById('gu') as HTMLInputElement).value;
+                const price = (document.getElementById('gp') as HTMLInputElement).value;
+                await supabase.from('gifts').insert([{ name, image_url: url, price: parseInt(price) }]);
+                alert("Товар добавлен!");
+                loadStore();
+              }} style={{...btnAction, marginTop:'10px'}}>ОПУБЛИКОВАТЬ</button>
             </div>
           </div>
         )}
@@ -277,16 +277,9 @@ export default function Home() {
   );
 }
 
-// СТИЛИ (Оптимизировано для Vercel/Next.js)
-const btnTab = (active: boolean): React.CSSProperties => ({
-  background: active ? THEME.accent : 'none', border: 'none', color: '#fff', padding: '12px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+// Помощники стилей
+const btnTab = (active: boolean) => ({
+  background: active ? '#111' : 'none', border: 'none', color: active ? '#fff' : '#777', padding: '12px', borderRadius: '12px', textAlign: 'left' as const, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', width: '100%'
 });
-const inputStyle: React.CSSProperties = { width: '100%', background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '12px', borderRadius: '12px', outline: 'none' };
-const btnMain: React.CSSProperties = { width: '100%', background: THEME.accent, color: '#fff', border: 'none', padding: '12px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' };
-const btnAction: React.CSSProperties = { width: '100%', background: '#fff', color: '#000', border: 'none', padding: '8px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' };
-const btnIcon: React.CSSProperties = { background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '10px', borderRadius: '10px', cursor: 'pointer' };
-const foundUserCard: React.CSSProperties = { padding: '10px', background: THEME.card, borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' };
-const reqCard: React.CSSProperties = { padding: '10px', background: THEME.gold + '22', borderRadius: '12px', border: `1px solid ${THEME.gold}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', fontSize:'12px' };
-const friendItem = (active: boolean): React.CSSProperties => ({ padding: '12px', borderRadius: '12px', background: active ? THEME.card : 'none', cursor: 'pointer', border: `1px solid ${active ? THEME.accent : 'transparent'}`, marginBottom: '5px' });
-const adminCard: React.CSSProperties = { background: THEME.card, padding: '20px', borderRadius: '15px', border: `1px solid ${THEME.border}`, display: 'flex', flexDirection: 'column', gap: '10px' };
-const userRow: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#000', borderRadius: '10px', marginBottom: '5px' };
+const inputStyle = { width: '100%' as const, background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '10px', borderRadius: '10px', marginBottom: '5px' };
+const btnAction = { background: '#fff', color: '#000', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' as const, width: '100%' as const };
