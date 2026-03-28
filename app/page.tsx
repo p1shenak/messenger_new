@@ -6,7 +6,7 @@ import { createBrowserClient } from '@supabase/ssr';
 
 const { 
   UserCircle, MessageSquare, ShieldAlert, ShoppingBag, 
-  Save, Tag, Coins, LogOut, Ban, Gift, Sparkles
+  Tag, Coins, LogOut, Ban, Gift, Sparkles
 } = LucideIcons;
 
 const THEME = {
@@ -21,12 +21,12 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Auth states
-  const [username, setUsername] = useState(""); // Вход по нику
+  // Состояния авторизации (Вход по нику)
+  const [username, setUsername] = useState(""); 
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // Data states
+  // Данные
   const [inventory, setInventory] = useState<any[]>([]);
   const [storeGifts, setStoreGifts] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -66,13 +66,14 @@ export default function Home() {
   };
 
   const handleAuth = async () => {
-    // Костыль для Supabase: превращаем ник в виртуальный email
+    // Виртуальный email для работы через Supabase Auth
     const virtualEmail = `${username.toLowerCase()}@vexy.io`;
     
     if (isRegistering) {
       const { data, error } = await supabase.auth.signUp({ email: virtualEmail, password });
       if (error) return alert(error.message);
       if (data.user) {
+        // Создаем профиль в базе FONDI
         await supabase.from('profiles').insert([{ id: data.user.id, username, balance: 500 }]);
         window.location.reload();
       }
@@ -86,7 +87,7 @@ export default function Home() {
   const grantGift = async (userId: string, giftId: string) => {
     if (!giftId) return;
     const { error } = await supabase.from('inventory').insert([{ user_id: userId, gift_id: giftId }]);
-    if (!error) alert("Предмет успешно выдан!");
+    if (!error) alert("Предмет выдан!");
     loadData(profile.id);
   };
 
@@ -109,17 +110,16 @@ export default function Home() {
 
   if (!mounted) return null;
 
-  // ЭКРАН ВХОДА
   if (!profile && !loading) {
     return (
       <div style={{ background: THEME.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: THEME.card, padding: '40px', borderRadius: '30px', border: `1px solid ${THEME.border}`, width: '350px' }}>
-          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '30px', letterSpacing: '2px' }}>VOID_AUTH</h2>
+          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '30px' }}>VEXY_AUTH</h2>
           <input placeholder="НИКНЕЙМ" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} />
           <input type="password" placeholder="ПАРОЛЬ" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />
-          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "СОЗДАТЬ АККАУНТ" : "ВОЙТИ В СИСТЕМУ"}</button>
+          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "РЕГИСТРАЦИЯ" : "ВОЙТИ"}</button>
           <p onClick={() => setIsRegistering(!isRegistering)} style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', cursor: 'pointer', color: THEME.muted }}>
-            {isRegistering ? "УЖЕ ЕСТЬ ДОСТУП? ВХОД" : "НЕТ ДОСТУПА? РЕГИСТРАЦИЯ"}
+            {isRegistering ? "Есть аккаунт? Войти" : "Нет аккаунта? Регистрация"}
           </p>
         </div>
       </div>
@@ -128,44 +128,32 @@ export default function Home() {
 
   return (
     <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'monospace' }}>
-      {/* SIDEBAR */}
       <nav style={{ width: '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '25px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ color: THEME.accent, fontWeight: 'bold', fontSize: '20px', marginBottom: '30px' }}>VEXY_NET</div>
-        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> МОЙ ПРОФИЛЬ</button>
+        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> ПРОФИЛЬ</button>
         <button onClick={() => setActiveTab("store")} style={btnTab(activeTab === "store")}><ShoppingBag size={18}/> МАГАЗИН</button>
-        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.mythic} as any}><ShieldAlert size={18}/> АДМИН-ПАНЕЛЬ</button>}
+        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.mythic} as any}><ShieldAlert size={18}/> АДМИНКА</button>}
         
         <div style={{ marginTop: 'auto', background: THEME.card, padding: '15px', borderRadius: '15px', border: `1px solid ${THEME.border}` }}>
-          <div style={{fontSize: '10px', color: THEME.muted, marginBottom: '5px'}}>БАЛАНС</div>
           <div style={{color: THEME.gold, fontWeight: 'bold', fontSize: '18px'}}>{profile?.balance || 0} CR</div>
-          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'15px', display:'flex', alignItems:'center', gap:'5px'}}><LogOut size={12}/> ВЫЙТИ</button>
+          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'15px'}}><LogOut size={12}/> ВЫЙТИ</button>
         </div>
       </nav>
 
-      {/* CONTENT */}
       <section style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
-        
         {activeTab === "profile" && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '25px', marginBottom: '40px' }}>
-              <div style={{ width: '100px', height: '100px', borderRadius: '30px', background: THEME.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>{profile?.username[0]}</div>
-              <div>
-                <h1 style={{ margin: 0 }}>{profile?.username}</h1>
-                <span style={{ color: THEME.accent }}>{profile?.is_admin ? "ADMINISTRATOR" : "USER"}</span>
-              </div>
-            </div>
-
-            <h3 style={{ marginBottom: '20px', borderBottom: `1px solid ${THEME.border}`, paddingBottom: '10px' }}>ИНВЕНТАРЬ</h3>
+            <h3 style={{ marginBottom: '20px' }}>ИНВЕНТАРЬ ({inventory.length})</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px' }}>
               {inventory.map((i: any) => (
                 <div key={i.id} style={{ 
-                  background: THEME.card, padding: '15px', borderRadius: '20px', border: i.gifts?.is_nft ? `1px solid ${THEME.mythic}` : `1px solid ${THEME.border}`, 
-                  textAlign: 'center', position: 'relative', boxShadow: i.gifts?.is_nft ? `0 0 15px ${THEME.mythic}33` : 'none'
+                  background: THEME.card, padding: '15px', borderRadius: '20px', 
+                  border: i.gifts?.is_nft ? `1px solid ${THEME.mythic}` : `1px solid ${THEME.border}`, 
+                  textAlign: 'center', position: 'relative'
                 }}>
                   {i.gifts?.is_nft && <Sparkles size={14} style={{position:'absolute', top:10, right:10, color: THEME.mythic}}/>}
-                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '90px', objectFit: 'contain', marginBottom: '10px' }} />
+                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '90px', objectFit: 'contain' }} />
                   <div style={{fontSize: '12px', fontWeight: 'bold'}}>{i.gifts?.name}</div>
-                  {i.gifts?.is_nft && <div style={{fontSize: '9px', color: THEME.mythic, marginTop: '4px'}}>NFT LIMITED</div>}
                 </div>
               ))}
             </div>
@@ -176,22 +164,19 @@ export default function Home() {
           <div>
             <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
               <button onClick={() => setAdminTab("items")} style={btnSubTab(adminTab === "items")}>МАГАЗИН</button>
-              <button onClick={() => setAdminTab("users")} style={btnSubTab(adminTab === "users")}>ПОЛЬЗОВАТЕЛИ</button>
+              <button onClick={() => setAdminTab("users")} style={btnSubTab(adminTab === "users")}>ВЫДАЧА</button>
             </div>
 
             {adminTab === "items" && (
               <div style={adminCard}>
-                <h3 style={{marginBottom: '20px'}}>СОЗДАТЬ ПРЕДМЕТ</h3>
                 <input placeholder="Название" onChange={e => setNewGift({...newGift, name: e.target.value})} style={inputStyle} />
                 <input placeholder="URL Картинки" onChange={e => setNewGift({...newGift, image_url: e.target.value})} style={inputStyle} />
                 <input type="number" placeholder="Цена" onChange={e => setNewGift({...newGift, price: parseInt(e.target.value)})} style={inputStyle} />
-                
-                <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px', padding:'10px', background:THEME.bg, borderRadius:'10px'}}>
-                  <input type="checkbox" id="nft" checked={newGift.is_nft} onChange={e => setNewGift({...newGift, is_nft: e.target.checked})} />
-                  <label htmlFor="nft" style={{fontSize:'12px', color: newGift.is_nft ? THEME.mythic : THEME.muted}}>МЕТКА NFT (СПЕЦЭФФЕКТЫ)</label>
+                <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                   <input type="checkbox" onChange={e => setNewGift({...newGift, is_nft: e.target.checked})} />
+                   <label style={{fontSize:'12px'}}>NFT ТОВАР</label>
                 </div>
-
-                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Предмет создан!"); loadData(profile.id); }} style={btnMain}>ОПУБЛИКОВАТЬ В МАГАЗИН</button>
+                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Создано!"); loadData(profile.id); }} style={btnMain}>ОПУБЛИКОВАТЬ</button>
               </div>
             )}
 
@@ -199,14 +184,10 @@ export default function Home() {
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {allUsers.map((u: any) => (
                   <div key={u.id} style={{...adminCard, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <div>
-                      <div style={{fontWeight: 'bold'}}>{u.username}</div>
-                      <div style={{fontSize: '11px', color: THEME.muted}}>{u.balance} CR</div>
-                    </div>
-                    <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                      {/* СЕЛЕКТ ДЛЯ ВЫДАЧИ ПОДАРКА */}
-                      <select id={`gift-${u.id}`} style={{background:'#000', color:'#fff', border:`1px solid ${THEME.border}`, padding:'5px', borderRadius:'5px', fontSize:'11px'}}>
-                        <option value="">Выдать подарок...</option>
+                    <span>{u.username}</span>
+                    <div style={{display: 'flex', gap: '10px'}}>
+                      <select id={`gift-${u.id}`} style={{background:'#000', color:'#fff', border:`1px solid ${THEME.border}`, borderRadius:'5px'}}>
+                        <option value="">Подарок...</option>
                         {storeGifts.map(g => (
                           <option key={g.id} value={g.id}>{g.is_nft ? '⭐ ' : ''}{g.name}</option>
                         ))}
@@ -226,10 +207,9 @@ export default function Home() {
   );
 }
 
-// STYLES
-const btnTab = (active: boolean) => ({ background: active ? THEME.accent : 'none', border: 'none', color: '#fff', padding: '12px 18px', borderRadius: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', width: '100%', textAlign: 'left' as const, transition: '0.2s' });
-const btnSubTab = (active: boolean) => ({ background: active ? THEME.accent : THEME.card, color: '#fff', border: `1px solid ${active ? THEME.accent : THEME.border}`, padding: '8px 20px', borderRadius: '10px', cursor: 'pointer' });
-const inputStyle = { width: '100%' as const, background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '14px', borderRadius: '12px', marginBottom: '12px', outline: 'none' };
+const btnTab = (active: boolean) => ({ background: active ? THEME.accent : 'none', border: 'none', color: '#fff', padding: '12px 18px', borderRadius: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', width: '100%', textAlign: 'left' as const });
+const btnSubTab = (active: boolean) => ({ background: active ? THEME.accent : THEME.card, color: '#fff', border: `1px solid ${THEME.border}`, padding: '8px 20px', borderRadius: '10px', cursor: 'pointer' });
+const inputStyle = { width: '100%' as const, background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '14px', borderRadius: '12px', marginBottom: '12px' };
 const btnMain = { width: '100%' as const, background: THEME.accent, color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' as const };
-const btnSmall = { background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' };
+const btnSmall = { background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '8px', borderRadius: '8px', cursor: 'pointer' };
 const adminCard = { background: THEME.card, padding: '25px', borderRadius: '22px', border: `1px solid ${THEME.border}` };
