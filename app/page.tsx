@@ -21,12 +21,12 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Состояния авторизации (Вход по нику)
+  // Auth states (Вход по нику)
   const [username, setUsername] = useState(""); 
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // Данные
+  // Data states
   const [inventory, setInventory] = useState<any[]>([]);
   const [storeGifts, setStoreGifts] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -43,15 +43,20 @@ export default function Home() {
   }, []);
 
   async function checkUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (prof) {
-        setProfile(prof);
-        loadData(prof.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+        if (prof) {
+          setProfile(prof);
+          loadData(prof.id);
+        }
       }
+    } catch (e) {
+      console.error("Auth error:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const loadData = async (uid: string) => {
@@ -66,19 +71,25 @@ export default function Home() {
   };
 
   const handleAuth = async () => {
-    // Виртуальный email для работы через Supabase Auth
+    if (!username || !password) return alert("Заполни все поля!");
     const virtualEmail = `${username.toLowerCase()}@vexy.io`;
     
     if (isRegistering) {
-      const { data, error } = await supabase.auth.signUp({ email: virtualEmail, password });
+      const { data, error } = await supabase.auth.signUp({ 
+        email: virtualEmail, 
+        password 
+      });
       if (error) return alert(error.message);
       if (data.user) {
-        // Создаем профиль в базе FONDI
         await supabase.from('profiles').insert([{ id: data.user.id, username, balance: 500 }]);
         window.location.reload();
       }
     } else {
-      const { error } = await supabase.signInWithPassword({ email: virtualEmail, password });
+      // ИСПРАВЛЕНО: Добавлен .auth. для корректной работы в Vercel
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: virtualEmail, 
+        password 
+      });
       if (error) alert("Ошибка: неверный ник или пароль");
       else window.location.reload();
     }
@@ -87,8 +98,8 @@ export default function Home() {
   const grantGift = async (userId: string, giftId: string) => {
     if (!giftId) return;
     const { error } = await supabase.from('inventory').insert([{ user_id: userId, gift_id: giftId }]);
-    if (!error) alert("Предмет выдан!");
-    loadData(profile.id);
+    if (!error) alert("Предмет успешно выдан!");
+    if (profile) loadData(profile.id);
   };
 
   const grantAction = async (type: string, uid: string) => {
@@ -105,7 +116,7 @@ export default function Home() {
         await supabase.from('profiles').update({ banned_until: date }).eq('id', uid);
       }
     }
-    loadData(profile.id);
+    if (profile) loadData(profile.id);
   };
 
   if (!mounted) return null;
@@ -114,12 +125,12 @@ export default function Home() {
     return (
       <div style={{ background: THEME.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: THEME.card, padding: '40px', borderRadius: '30px', border: `1px solid ${THEME.border}`, width: '350px' }}>
-          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '30px' }}>VEXY_AUTH</h2>
+          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '30px', letterSpacing: '2px' }}>VEXY_OS</h2>
           <input placeholder="НИКНЕЙМ" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} />
           <input type="password" placeholder="ПАРОЛЬ" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />
-          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "РЕГИСТРАЦИЯ" : "ВОЙТИ"}</button>
+          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "РЕГИСТРАЦИЯ" : "АВТОРИЗАЦИЯ"}</button>
           <p onClick={() => setIsRegistering(!isRegistering)} style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', cursor: 'pointer', color: THEME.muted }}>
-            {isRegistering ? "Есть аккаунт? Войти" : "Нет аккаунта? Регистрация"}
+            {isRegistering ? "ЕСТЬ ДОСТУП? ВХОД" : "НЕТ ДОСТУПА? СОЗДАТЬ"}
           </p>
         </div>
       </div>
@@ -130,29 +141,28 @@ export default function Home() {
     <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'monospace' }}>
       <nav style={{ width: '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '25px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ color: THEME.accent, fontWeight: 'bold', fontSize: '20px', marginBottom: '30px' }}>VEXY_NET</div>
-        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> ПРОФИЛЬ</button>
+        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> МОЙ ПРОФИЛЬ</button>
         <button onClick={() => setActiveTab("store")} style={btnTab(activeTab === "store")}><ShoppingBag size={18}/> МАГАЗИН</button>
-        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.mythic} as any}><ShieldAlert size={18}/> АДМИНКА</button>}
+        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.mythic} as any}><ShieldAlert size={18}/> АДМИН-ПАНЕЛЬ</button>}
         
         <div style={{ marginTop: 'auto', background: THEME.card, padding: '15px', borderRadius: '15px', border: `1px solid ${THEME.border}` }}>
           <div style={{color: THEME.gold, fontWeight: 'bold', fontSize: '18px'}}>{profile?.balance || 0} CR</div>
-          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'15px'}}><LogOut size={12}/> ВЫЙТИ</button>
+          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'15px', display:'flex', alignItems:'center', gap:'5px'}}><LogOut size={12}/> ВЫЙТИ</button>
         </div>
       </nav>
 
       <section style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
         {activeTab === "profile" && (
           <div>
-            <h3 style={{ marginBottom: '20px' }}>ИНВЕНТАРЬ ({inventory.length})</h3>
+            <h3 style={{ marginBottom: '20px', borderBottom: `1px solid ${THEME.border}`, paddingBottom: '10px' }}>МОЙ ИНВЕНТАРЬ ({inventory.length})</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px' }}>
               {inventory.map((i: any) => (
                 <div key={i.id} style={{ 
-                  background: THEME.card, padding: '15px', borderRadius: '20px', 
-                  border: i.gifts?.is_nft ? `1px solid ${THEME.mythic}` : `1px solid ${THEME.border}`, 
-                  textAlign: 'center', position: 'relative'
+                  background: THEME.card, padding: '15px', borderRadius: '20px', border: i.gifts?.is_nft ? `1px solid ${THEME.mythic}` : `1px solid ${THEME.border}`, 
+                  textAlign: 'center', position: 'relative', boxShadow: i.gifts?.is_nft ? `0 0 15px ${THEME.mythic}33` : 'none'
                 }}>
                   {i.gifts?.is_nft && <Sparkles size={14} style={{position:'absolute', top:10, right:10, color: THEME.mythic}}/>}
-                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '90px', objectFit: 'contain' }} />
+                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '90px', objectFit: 'contain', marginBottom: '10px' }} />
                   <div style={{fontSize: '12px', fontWeight: 'bold'}}>{i.gifts?.name}</div>
                 </div>
               ))}
@@ -164,19 +174,20 @@ export default function Home() {
           <div>
             <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
               <button onClick={() => setAdminTab("items")} style={btnSubTab(adminTab === "items")}>МАГАЗИН</button>
-              <button onClick={() => setAdminTab("users")} style={btnSubTab(adminTab === "users")}>ВЫДАЧА</button>
+              <button onClick={() => setAdminTab("users")} style={btnSubTab(adminTab === "users")}>УПРАВЛЕНИЕ</button>
             </div>
 
             {adminTab === "items" && (
               <div style={adminCard}>
+                <h3 style={{marginBottom: '20px'}}>НОВЫЙ ТОВАР</h3>
                 <input placeholder="Название" onChange={e => setNewGift({...newGift, name: e.target.value})} style={inputStyle} />
                 <input placeholder="URL Картинки" onChange={e => setNewGift({...newGift, image_url: e.target.value})} style={inputStyle} />
                 <input type="number" placeholder="Цена" onChange={e => setNewGift({...newGift, price: parseInt(e.target.value)})} style={inputStyle} />
-                <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
-                   <input type="checkbox" onChange={e => setNewGift({...newGift, is_nft: e.target.checked})} />
-                   <label style={{fontSize:'12px'}}>NFT ТОВАР</label>
+                <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px', padding:'10px', background:THEME.bg, borderRadius:'10px'}}>
+                  <input type="checkbox" id="is_nft" checked={newGift.is_nft} onChange={e => setNewGift({...newGift, is_nft: e.target.checked})} />
+                  <label htmlFor="is_nft" style={{fontSize:'12px', color: newGift.is_nft ? THEME.mythic : THEME.muted}}>NFT ТОВАР (ВИЗУАЛЬНЫЕ ЭФФЕКТЫ)</label>
                 </div>
-                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Создано!"); loadData(profile.id); }} style={btnMain}>ОПУБЛИКОВАТЬ</button>
+                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Товар создан!"); if (profile) loadData(profile.id); }} style={btnMain}>ОПУБЛИКОВАТЬ</button>
               </div>
             )}
 
@@ -184,15 +195,15 @@ export default function Home() {
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {allUsers.map((u: any) => (
                   <div key={u.id} style={{...adminCard, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <span>{u.username}</span>
-                    <div style={{display: 'flex', gap: '10px'}}>
-                      <select id={`gift-${u.id}`} style={{background:'#000', color:'#fff', border:`1px solid ${THEME.border}`, borderRadius:'5px'}}>
-                        <option value="">Подарок...</option>
+                    <div style={{fontWeight: 'bold'}}>{u.username} <span style={{fontSize:'10px', color:THEME.muted}}>{u.balance} CR</span></div>
+                    <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                      <select id={`g-${u.id}`} style={{background:'#000', color:'#fff', border:`1px solid ${THEME.border}`, padding:'5px', borderRadius:'5px', fontSize:'11px'}}>
+                        <option value="">Выдать предмет...</option>
                         {storeGifts.map(g => (
                           <option key={g.id} value={g.id}>{g.is_nft ? '⭐ ' : ''}{g.name}</option>
                         ))}
                       </select>
-                      <button onClick={() => grantGift(u.id, (document.getElementById(`gift-${u.id}`) as HTMLSelectElement).value)} style={{...btnSmall, background: THEME.mythic}}><Gift size={14}/></button>
+                      <button onClick={() => grantGift(u.id, (document.getElementById(`g-${u.id}`) as HTMLSelectElement).value)} style={{...btnSmall, background: THEME.mythic}}><Gift size={14}/></button>
                       <button onClick={() => grantAction('money', u.id)} style={btnSmall}><Coins size={14}/></button>
                       <button onClick={() => grantAction('ban', u.id)} style={{...btnSmall, color: THEME.red}}><Ban size={14}/></button>
                     </div>
