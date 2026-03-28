@@ -6,7 +6,7 @@ import { createBrowserClient } from '@supabase/ssr';
 
 const { 
   UserCircle, MessageSquare, ShieldAlert, ShoppingBag, 
-  Edit3, Save, Eye, Tag, Coins, LogOut, Ban
+  Save, Tag, Coins, LogOut, Ban, Gift, Sparkles
 } = LucideIcons;
 
 const THEME = {
@@ -21,23 +21,16 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  const [email, setEmail] = useState("");
+  // Auth states
+  const [username, setUsername] = useState(""); // Вход по нику
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // Data states
   const [inventory, setInventory] = useState<any[]>([]);
   const [storeGifts, setStoreGifts] = useState<any[]>([]);
-  const [marketItems, setMarketItems] = useState<any[]>([]);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
-
-  const [messages, setMessages] = useState<any[]>([]);
-  const [selectedChat, setSelectedChat] = useState<any>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [newAvatar, setNewAvatar] = useState("");
-  const [newGift, setNewGift] = useState<any>({ name: '', image_url: '', price: 0, is_nft: false, rarity: 'common' });
+  const [newGift, setNewGift] = useState<any>({ name: '', image_url: '', price: 0, is_nft: false });
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!, 
@@ -50,59 +43,65 @@ export default function Home() {
   }, []);
 
   async function checkUser() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        if (prof) {
-          setProfile(prof);
-          setNewUsername(prof.username || "");
-          setNewAvatar(prof.avatar_url || "");
-          loadData(prof.id);
-        }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (prof) {
+        setProfile(prof);
+        loadData(prof.id);
       }
-    } catch (e) { console.error(e); }
+    }
     setLoading(false);
   }
 
   const loadData = async (uid: string) => {
-    const [gs, inv, mkt, fr, reps, usrs] = await Promise.all([
+    const [gs, inv, usrs] = await Promise.all([
       supabase.from('gifts').select('*').order('created_at', { ascending: false }),
       supabase.from('inventory').select('*, gifts(*)').eq('user_id', uid),
-      supabase.from('inventory').select('*, gifts(*), profiles(username)').eq('is_on_sale', true),
-      supabase.from('friends').select('*, profiles!friends_friend_id_fkey(*), requester:profiles!friends_user_id_fkey(*)').eq('status', 'accepted').or(`user_id.eq.${uid},friend_id.eq.${uid}`),
-      supabase.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(username), target:profiles!reports_target_id_fkey(username)'),
-      supabase.from('profiles').select('*')
+      supabase.from('profiles').select('*').order('username', { ascending: true })
     ]);
     setStoreGifts(gs.data || []);
     setInventory(inv.data || []);
-    setMarketItems(mkt.data || []);
-    setFriends(fr.data?.map((i: any) => i.user_id === uid ? i.profiles : i.requester) || []);
-    setReports(reps.data || []);
     setAllUsers(usrs.data || []);
   };
 
   const handleAuth = async () => {
-    const { error } = isRegistering 
-      ? await supabase.auth.signUp({ email, password }) 
-      : await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message); else window.location.reload();
+    // Костыль для Supabase: превращаем ник в виртуальный email
+    const virtualEmail = `${username.toLowerCase()}@vexy.io`;
+    
+    if (isRegistering) {
+      const { data, error } = await supabase.auth.signUp({ email: virtualEmail, password });
+      if (error) return alert(error.message);
+      if (data.user) {
+        await supabase.from('profiles').insert([{ id: data.user.id, username, balance: 500 }]);
+        window.location.reload();
+      }
+    } else {
+      const { error } = await supabase.signInWithPassword({ email: virtualEmail, password });
+      if (error) alert("Ошибка: неверный ник или пароль");
+      else window.location.reload();
+    }
+  };
+
+  const grantGift = async (userId: string, giftId: string) => {
+    if (!giftId) return;
+    const { error } = await supabase.from('inventory').insert([{ user_id: userId, gift_id: giftId }]);
+    if (!error) alert("Предмет успешно выдан!");
+    loadData(profile.id);
   };
 
   const grantAction = async (type: string, uid: string) => {
     if (type === 'money') {
-      const amt = prompt("Сумма CR:");
+      const amt = prompt("Сколько CR выдать?");
       if (amt) {
         const { data } = await supabase.from('profiles').select('balance').eq('id', uid).single();
         await supabase.from('profiles').update({ balance: (data?.balance || 0) + parseInt(amt) }).eq('id', uid);
-        alert("CR выданы");
       }
     } else if (type === 'ban') {
-      const hrs = prompt("Часы бана:");
+      const hrs = prompt("Часы бана (0 для разбана):");
       if (hrs) {
-        const date = new Date(Date.now() + parseInt(hrs) * 3600000).toISOString();
+        const date = parseInt(hrs) === 0 ? null : new Date(Date.now() + parseInt(hrs) * 3600000).toISOString();
         await supabase.from('profiles').update({ banned_until: date }).eq('id', uid);
-        alert("Пользователь забанен");
       }
     }
     loadData(profile.id);
@@ -110,16 +109,17 @@ export default function Home() {
 
   if (!mounted) return null;
 
+  // ЭКРАН ВХОДА
   if (!profile && !loading) {
     return (
-      <div style={{ background: THEME.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-        <div style={{ background: THEME.card, padding: '40px', borderRadius: '30px', border: `1px solid ${THEME.border}`, width: '100%', maxWidth: '400px' }}>
-          <h1 style={{ color: THEME.accent, textAlign: 'center' }}>VOID_OS</h1>
-          <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />
-          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "РЕГИСТРАЦИЯ" : "ВОЙТИ"}</button>
-          <p onClick={() => setIsRegistering(!isRegistering)} style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', cursor: 'pointer', color: THEME.muted }}>
-            {isRegistering ? "Есть аккаунт? Войти" : "Нет аккаунта? Регистрация"}
+      <div style={{ background: THEME.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: THEME.card, padding: '40px', borderRadius: '30px', border: `1px solid ${THEME.border}`, width: '350px' }}>
+          <h2 style={{ color: THEME.accent, textAlign: 'center', marginBottom: '30px', letterSpacing: '2px' }}>VOID_AUTH</h2>
+          <input placeholder="НИКНЕЙМ" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} />
+          <input type="password" placeholder="ПАРОЛЬ" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />
+          <button onClick={handleAuth} style={btnMain}>{isRegistering ? "СОЗДАТЬ АККАУНТ" : "ВОЙТИ В СИСТЕМУ"}</button>
+          <p onClick={() => setIsRegistering(!isRegistering)} style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', cursor: 'pointer', color: THEME.muted }}>
+            {isRegistering ? "УЖЕ ЕСТЬ ДОСТУП? ВХОД" : "НЕТ ДОСТУПА? РЕГИСТРАЦИЯ"}
           </p>
         </div>
       </div>
@@ -128,36 +128,44 @@ export default function Home() {
 
   return (
     <main style={{ background: THEME.bg, color: THEME.text, height: '100vh', display: 'flex', fontFamily: 'monospace' }}>
-      <nav style={{ width: '250px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 style={{ color: THEME.accent, marginBottom: '20px' }}>VOID</h2>
-        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> ПРОФИЛЬ</button>
+      {/* SIDEBAR */}
+      <nav style={{ width: '260px', background: THEME.sidebar, borderRight: `1px solid ${THEME.border}`, padding: '25px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ color: THEME.accent, fontWeight: 'bold', fontSize: '20px', marginBottom: '30px' }}>VEXY_NET</div>
+        <button onClick={() => setActiveTab("profile")} style={btnTab(activeTab === "profile")}><UserCircle size={18}/> МОЙ ПРОФИЛЬ</button>
         <button onClick={() => setActiveTab("store")} style={btnTab(activeTab === "store")}><ShoppingBag size={18}/> МАГАЗИН</button>
-        <button onClick={() => setActiveTab("market")} style={btnTab(activeTab === "market")}><Tag size={18}/> РЫНОК</button>
-        <button onClick={() => setActiveTab("chat")} style={btnTab(activeTab === "chat")}><MessageSquare size={18}/> СВЯЗЬ</button>
-        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.red} as any}><ShieldAlert size={18}/> АДМИНКА</button>}
+        {profile?.is_admin && <button onClick={() => setActiveTab("admin")} style={{...btnTab(activeTab === "admin"), color: THEME.mythic} as any}><ShieldAlert size={18}/> АДМИН-ПАНЕЛЬ</button>}
         
         <div style={{ marginTop: 'auto', background: THEME.card, padding: '15px', borderRadius: '15px', border: `1px solid ${THEME.border}` }}>
-          <div style={{color: THEME.gold, fontWeight: 'bold'}}>{profile?.balance || 0} CR</div>
-          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'10px'}}><LogOut size={12}/> ВЫЙТИ</button>
+          <div style={{fontSize: '10px', color: THEME.muted, marginBottom: '5px'}}>БАЛАНС</div>
+          <div style={{color: THEME.gold, fontWeight: 'bold', fontSize: '18px'}}>{profile?.balance || 0} CR</div>
+          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{background:'none', border:'none', color:THEME.red, cursor:'pointer', fontSize:'11px', marginTop:'15px', display:'flex', alignItems:'center', gap:'5px'}}><LogOut size={12}/> ВЫЙТИ</button>
         </div>
       </nav>
 
-      <section style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+      {/* CONTENT */}
+      <section style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+        
         {activeTab === "profile" && (
           <div>
-            <div style={{ background: THEME.card, padding: '20px', borderRadius: '20px', border: `1px solid ${THEME.border}`, display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
-              <img src={profile?.avatar_url || ''} style={{ width: '80px', height: '80px', borderRadius: '50%', background: THEME.sidebar }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '25px', marginBottom: '40px' }}>
+              <div style={{ width: '100px', height: '100px', borderRadius: '30px', background: THEME.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>{profile?.username[0]}</div>
               <div>
-                <h3>{profile?.username}</h3>
-                <p style={{color: THEME.muted, fontSize: '12px'}}>{profile?.id}</p>
+                <h1 style={{ margin: 0 }}>{profile?.username}</h1>
+                <span style={{ color: THEME.accent }}>{profile?.is_admin ? "ADMINISTRATOR" : "USER"}</span>
               </div>
             </div>
-            <h3>ИНВЕНТАРЬ ({inventory.length})</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+
+            <h3 style={{ marginBottom: '20px', borderBottom: `1px solid ${THEME.border}`, paddingBottom: '10px' }}>ИНВЕНТАРЬ</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px' }}>
               {inventory.map((i: any) => (
-                <div key={i.id} style={{ background: THEME.card, padding: '10px', borderRadius: '15px', border: `1px solid ${THEME.border}`, textAlign: 'center' }}>
-                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '80px', objectFit: 'contain' }} />
-                  <div style={{fontSize: '11px'}}>{i.gifts?.name}</div>
+                <div key={i.id} style={{ 
+                  background: THEME.card, padding: '15px', borderRadius: '20px', border: i.gifts?.is_nft ? `1px solid ${THEME.mythic}` : `1px solid ${THEME.border}`, 
+                  textAlign: 'center', position: 'relative', boxShadow: i.gifts?.is_nft ? `0 0 15px ${THEME.mythic}33` : 'none'
+                }}>
+                  {i.gifts?.is_nft && <Sparkles size={14} style={{position:'absolute', top:10, right:10, color: THEME.mythic}}/>}
+                  <img src={i.gifts?.image_url} style={{ width: '100%', height: '90px', objectFit: 'contain', marginBottom: '10px' }} />
+                  <div style={{fontSize: '12px', fontWeight: 'bold'}}>{i.gifts?.name}</div>
+                  {i.gifts?.is_nft && <div style={{fontSize: '9px', color: THEME.mythic, marginTop: '4px'}}>NFT LIMITED</div>}
                 </div>
               ))}
             </div>
@@ -166,27 +174,46 @@ export default function Home() {
 
         {activeTab === "admin" && (
           <div>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-              <button onClick={() => setAdminTab("items")} style={btnSubTab(adminTab === "items")}>ТОВАРЫ</button>
-              <button onClick={() => setAdminTab("reports")} style={btnSubTab(adminTab === "reports")}>ЖАЛОБЫ ({reports.length})</button>
-              <button onClick={() => setAdminTab("grant")} style={btnSubTab(adminTab === "grant")}>ВЫДАЧА</button>
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+              <button onClick={() => setAdminTab("items")} style={btnSubTab(adminTab === "items")}>МАГАЗИН</button>
+              <button onClick={() => setAdminTab("users")} style={btnSubTab(adminTab === "users")}>ПОЛЬЗОВАТЕЛИ</button>
             </div>
+
             {adminTab === "items" && (
               <div style={adminCard}>
+                <h3 style={{marginBottom: '20px'}}>СОЗДАТЬ ПРЕДМЕТ</h3>
                 <input placeholder="Название" onChange={e => setNewGift({...newGift, name: e.target.value})} style={inputStyle} />
-                <input placeholder="GIF URL" onChange={e => setNewGift({...newGift, image_url: e.target.value})} style={inputStyle} />
+                <input placeholder="URL Картинки" onChange={e => setNewGift({...newGift, image_url: e.target.value})} style={inputStyle} />
                 <input type="number" placeholder="Цена" onChange={e => setNewGift({...newGift, price: parseInt(e.target.value)})} style={inputStyle} />
-                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Опубликовано"); loadData(profile.id); }} style={btnMain}>СОЗДАТЬ</button>
+                
+                <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px', padding:'10px', background:THEME.bg, borderRadius:'10px'}}>
+                  <input type="checkbox" id="nft" checked={newGift.is_nft} onChange={e => setNewGift({...newGift, is_nft: e.target.checked})} />
+                  <label htmlFor="nft" style={{fontSize:'12px', color: newGift.is_nft ? THEME.mythic : THEME.muted}}>МЕТКА NFT (СПЕЦЭФФЕКТЫ)</label>
+                </div>
+
+                <button onClick={async () => { await supabase.from('gifts').insert([newGift]); alert("Предмет создан!"); loadData(profile.id); }} style={btnMain}>ОПУБЛИКОВАТЬ В МАГАЗИН</button>
               </div>
             )}
-            {adminTab === "grant" && (
-              <div style={adminCard}>
+
+            {adminTab === "users" && (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {allUsers.map((u: any) => (
-                  <div key={u.id} style={{display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:`1px solid ${THEME.border}`}}>
-                    <span>{u.username}</span>
-                    <div style={{display:'flex', gap:'10px'}}>
+                  <div key={u.id} style={{...adminCard, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <div>
+                      <div style={{fontWeight: 'bold'}}>{u.username}</div>
+                      <div style={{fontSize: '11px', color: THEME.muted}}>{u.balance} CR</div>
+                    </div>
+                    <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                      {/* СЕЛЕКТ ДЛЯ ВЫДАЧИ ПОДАРКА */}
+                      <select id={`gift-${u.id}`} style={{background:'#000', color:'#fff', border:`1px solid ${THEME.border}`, padding:'5px', borderRadius:'5px', fontSize:'11px'}}>
+                        <option value="">Выдать подарок...</option>
+                        {storeGifts.map(g => (
+                          <option key={g.id} value={g.id}>{g.is_nft ? '⭐ ' : ''}{g.name}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => grantGift(u.id, (document.getElementById(`gift-${u.id}`) as HTMLSelectElement).value)} style={{...btnSmall, background: THEME.mythic}}><Gift size={14}/></button>
                       <button onClick={() => grantAction('money', u.id)} style={btnSmall}><Coins size={14}/></button>
-                      <button onClick={() => grantAction('ban', u.id)} style={{...btnSmall, color:THEME.red}}><Ban size={14}/></button>
+                      <button onClick={() => grantAction('ban', u.id)} style={{...btnSmall, color: THEME.red}}><Ban size={14}/></button>
                     </div>
                   </div>
                 ))}
@@ -199,9 +226,10 @@ export default function Home() {
   );
 }
 
-const btnTab = (active: boolean) => ({ background: active ? THEME.accent : 'none', border: 'none', color: '#fff', padding: '10px 15px', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left' as const });
-const btnSubTab = (active: boolean) => ({ background: active ? '#fff' : 'none', color: active ? '#000' : '#fff', border: `1px solid ${THEME.border}`, padding: '5px 15px', borderRadius: '8px', cursor: 'pointer' });
-const inputStyle = { width: '100%' as const, background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '12px', borderRadius: '10px', marginBottom: '10px' };
-const btnMain = { width: '100%' as const, background: THEME.accent, color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' as const };
-const btnSmall = { background: 'none', border: `1px solid ${THEME.border}`, color: '#fff', padding: '5px', borderRadius: '5px', cursor: 'pointer' };
-const adminCard = { background: THEME.card, padding: '20px', borderRadius: '20px', border: `1px solid ${THEME.border}` };
+// STYLES
+const btnTab = (active: boolean) => ({ background: active ? THEME.accent : 'none', border: 'none', color: '#fff', padding: '12px 18px', borderRadius: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', width: '100%', textAlign: 'left' as const, transition: '0.2s' });
+const btnSubTab = (active: boolean) => ({ background: active ? THEME.accent : THEME.card, color: '#fff', border: `1px solid ${active ? THEME.accent : THEME.border}`, padding: '8px 20px', borderRadius: '10px', cursor: 'pointer' });
+const inputStyle = { width: '100%' as const, background: '#000', border: `1px solid ${THEME.border}`, color: '#fff', padding: '14px', borderRadius: '12px', marginBottom: '12px', outline: 'none' };
+const btnMain = { width: '100%' as const, background: THEME.accent, color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' as const };
+const btnSmall = { background: THEME.card, border: `1px solid ${THEME.border}`, color: '#fff', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' };
+const adminCard = { background: THEME.card, padding: '25px', borderRadius: '22px', border: `1px solid ${THEME.border}` };
